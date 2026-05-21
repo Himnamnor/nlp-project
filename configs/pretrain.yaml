@@ -47,12 +47,12 @@ train:
   max_steps: null          # null = 跑完 1 epoch；或设具体步数
   micro_batch_size: 32     # OOM → 8
   grad_accum_steps: 2      # 有效 batch ≈ 64k tokens
-  learning_rate: 1.0e-4
-  min_lr: 3.0e-5
+  learning_rate: 6.0e-5      # 1e-4 在 warmup 结束后易震荡；step1000 PPL≈38 已达标
+  min_lr: 1.0e-5
   weight_decay: 0.1
   beta1: 0.9
   beta2: 0.95
-  grad_clip: 0.1
+  grad_clip: 1.0             # 0.1 过紧，与 GradScaler 配合用 1.0
   warmup_steps: 1000
   eval_interval: 500
   log_interval: 10

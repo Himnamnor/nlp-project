@@ -16,6 +16,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
 
 from src.data.pretrain import PretrainDataset
@@ -50,6 +51,9 @@ def train(cfg: dict) -> None:
     device = torch.device(cfg["project"]["device"] if torch.cuda.is_available() else "cpu")
     dtype = torch.bfloat16 if cfg["project"]["dtype"] == "bfloat16" else torch.float16
     use_amp = device.type == "cuda"
+    # fp16 needs loss scaling on V100 etc.; bf16 has enough dynamic range without it
+    use_grad_scaler = use_amp and dtype is torch.float16
+    scaler = GradScaler(enabled=use_grad_scaler)
 
     logger = init_logger(cfg, run_name=cfg["project"]["name"])
     ckpt_dir = Path(cfg["paths"]["checkpoint_dir"])
@@ -86,11 +90,13 @@ def train(cfg: dict) -> None:
     micro_step = 0
     best_ppl = float("inf")
     running_loss = 0.0
+    step_loss = 0.0
     optimizer.zero_grad(set_to_none=True)
 
     model.train()
     print(
         f"Starting pretrain: max_steps={max_steps}, device={device}, dtype={dtype}, "
+        f"grad_scaler={use_grad_scaler}, "
         f"micro_batch={cfg['train']['micro_batch_size']}, grad_accum={grad_accum}"
     )
     t0 = time.time()
@@ -104,23 +110,28 @@ def train(cfg: dict) -> None:
                 out = model(input_ids=input_ids, labels=labels)
                 loss = out["loss"] / grad_accum
 
-            loss.backward()
-            running_loss += loss.item()
+            step_loss += out["loss"].item()
+            scaler.scale(loss).backward()
             micro_step += 1
 
             if micro_step % grad_accum != 0:
                 continue
 
+            running_loss += step_loss / grad_accum
+            step_loss = 0.0
+
+            scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg["train"]["grad_clip"])
             lr = get_lr(global_step, cfg, max_steps)
             for pg in optimizer.param_groups:
                 pg["lr"] = lr
-            optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
             optimizer.zero_grad(set_to_none=True)
 
             global_step += 1
             if global_step % cfg["train"]["log_interval"] == 0:
-                avg_loss = running_loss * grad_accum / cfg["train"]["log_interval"]
+                avg_loss = running_loss / cfg["train"]["log_interval"]
                 logger.log_metrics(
                     global_step,
                     {"train/loss": avg_loss, "train/lr": lr},
