@@ -6,7 +6,7 @@ project:
   name: llama-mini-pretrain
   seed: 42
   device: cuda
-  dtype: bfloat16          # 3060 sm_86 支持 bf16
+  dtype: float16          # 3060 sm_86 支持 bf16
   compile: false           # 跑通后再开 torch.compile
 
 paths:
@@ -45,8 +45,8 @@ data:
 
 train:
   max_steps: null          # null = 跑完 1 epoch；或设具体步数
-  micro_batch_size: 16     # OOM → 8
-  grad_accum_steps: 4      # 有效 batch ≈ 64k tokens
+  micro_batch_size: 32     # OOM → 8
+  grad_accum_steps: 2      # 有效 batch ≈ 64k tokens
   learning_rate: 3.0e-4
   min_lr: 3.0e-5
   weight_decay: 0.1
