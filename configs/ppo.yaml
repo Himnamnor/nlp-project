@@ -1,0 +1,56 @@
+# configs/ppo.yaml
+# 用途：PPO 强化学习（TRL + LoRA，3060 显存优化配置）
+
+project:
+  name: llama-mini-ppo
+  seed: 42
+  device: cuda
+  dtype: bfloat16
+
+paths:
+  tokenizer_dir: tokenizer/
+  sft_ckpt: checkpoints/sft/best.pt
+  reward_ckpt: checkpoints/reward/
+  checkpoint_dir: checkpoints/ppo/
+  log_dir: logs/ppo/
+
+model:
+  n_layer: 6
+  d_model: 512
+  n_heads: 8
+  n_kv_heads: 4
+  context_length: 1024
+  vocab_size: 16384
+
+lora:
+  r: 8
+  lora_alpha: 16
+  lora_dropout: 0.05
+  target_modules:
+    - q_proj
+    - v_proj
+
+data:
+  dataset: PKU-Alignment/PKU-SafeRLHF
+  num_prompts: 2000
+  unsafe_ratio: 0.7        # 不安全 prompt 占比
+
+ppo:
+  batch_size: 8
+  mini_batch_size: 2
+  ppo_epochs: 4
+  learning_rate: 1.0e-5
+  init_kl_coef: 0.1
+  target_kl: 6.0
+  cliprange: 0.2
+  cliprange_value: 0.2
+  gamma: 1.0
+  lam: 0.95
+  max_new_tokens: 96
+  temperature: 1.0
+  top_p: 0.9
+  total_steps: 500
+
+logging:
+  use_wandb: true
+  wandb_project: nlp-llm-project

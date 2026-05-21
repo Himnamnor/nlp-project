@@ -1,0 +1,53 @@
+# configs/sft.yaml
+# 用途：指令微调（Alpaca-Cleaned，仅微调最后 2 层）
+
+project:
+  name: llama-mini-sft
+  seed: 42
+  device: cuda
+  dtype: bfloat16
+
+paths:
+  tokenizer_dir: tokenizer/
+  pretrain_ckpt: checkpoints/pretrain/best.pt
+  checkpoint_dir: checkpoints/sft/
+  log_dir: logs/sft/
+  eval_samples: logs/sft/eval_samples.jsonl
+
+model:
+  # 与 pretrain 一致；加载 pretrain_ckpt 后覆盖
+  n_layer: 6
+  d_model: 512
+  n_heads: 8
+  n_kv_heads: 4
+  context_length: 1024
+  vocab_size: 16384
+  tie_word_embeddings: true
+
+data:
+  dataset: yahma/alpaca-cleaned
+  min_samples: 2000
+  max_samples: null        # null = 使用全部过滤后样本
+  max_seq_length: 1024
+  num_workers: 2
+
+sft:
+  prompt_template: alpaca  # ### Instruction / Input / Response
+  trainable_layers: last_2   # 作业要求：仅最后 2 层 + final norm + lm_head
+  freeze_embedding: false    # tied embedding 会随 lm_head 更新；对照实验可设 true + untie
+
+train:
+  num_epochs: 4
+  micro_batch_size: 8
+  grad_accum_steps: 4
+  learning_rate: 5.0e-5
+  weight_decay: 0.01
+  grad_clip: 1.0
+  warmup_ratio: 0.03
+  eval_interval: 200
+  log_interval: 10
+  save_interval: 500
+
+logging:
+  use_wandb: true
+  wandb_project: nlp-llm-project

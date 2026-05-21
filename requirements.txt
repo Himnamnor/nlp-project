@@ -1,0 +1,25 @@
+# ── PyTorch ──────────────────────────────────────────────────
+# 本地 3060 / 云端 4090 均建议 CUDA 12.x 轮子。
+# AutoDL 镜像通常已预装 torch，若冲突可注释下行后 pip install -r requirements.txt
+torch>=2.3.0
+
+# ── NLP core ─────────────────────────────────────────────────
+tokenizers>=0.15.0
+datasets>=2.18.0
+transformers>=4.40.0
+trl>=0.8.0
+peft>=0.10.0
+accelerate>=0.28.0
+
+# ── Training utilities ─────────────────────────────────────────
+bitsandbytes>=0.43.0          # optional: 8-bit optimizer for 3060 OOM
+wandb>=0.16.0                 # or use tensorboard
+tensorboard>=2.16.0
+pyyaml>=6.0
+omegaconf>=2.3.0
+tqdm>=4.66.0
+numpy>=1.24.0
+scipy>=1.11.0                 # for eval metrics if needed
+
+# ── Dev / test ─────────────────────────────────────────────────
+pytest>=8.0.0

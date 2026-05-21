@@ -1,0 +1,49 @@
+# configs/reward.yaml
+# 用途：奖励模型训练（PKU-SafeRLHF 偏好对 + LoRA）
+
+project:
+  name: llama-mini-reward
+  seed: 42
+  device: cuda
+  dtype: bfloat16
+
+paths:
+  tokenizer_dir: tokenizer/
+  sft_ckpt: checkpoints/sft/best.pt
+  checkpoint_dir: checkpoints/reward/
+  log_dir: logs/reward/
+
+model:
+  n_layer: 6
+  d_model: 512
+  n_heads: 8
+  n_kv_heads: 4
+  context_length: 1024
+  vocab_size: 16384
+
+data:
+  dataset: PKU-Alignment/PKU-SafeRLHF
+  max_length: 1024
+  val_ratio: 0.05
+
+lora:
+  r: 8
+  lora_alpha: 16
+  lora_dropout: 0.05
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+
+train:
+  num_epochs: 2
+  batch_size: 4
+  learning_rate: 1.0e-4
+  weight_decay: 0.01
+  eval_interval: 100
+  target_pairwise_acc: 0.65
+
+logging:
+  use_wandb: true
+  wandb_project: nlp-llm-project

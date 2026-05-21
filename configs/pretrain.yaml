@@ -1,0 +1,65 @@
+# configs/pretrain.yaml
+# 用途：预训练阶段超参（TinyStories + Llama3-mini）
+# 硬件默认：RTX 3060 12GB；云端 4090 可调大 micro_batch_size
+
+project:
+  name: llama-mini-pretrain
+  seed: 42
+  device: cuda
+  dtype: bfloat16          # 3060 sm_86 支持 bf16
+  compile: false           # 跑通后再开 torch.compile
+
+paths:
+  tokenizer_dir: tokenizer/
+  data_dir: data/processed/
+  train_bin: data/processed/train.bin
+  val_bin: data/processed/val.bin
+  checkpoint_dir: checkpoints/pretrain/
+  log_dir: logs/pretrain/
+
+model:
+  n_layer: 6
+  d_model: 512
+  n_heads: 8
+  n_kv_heads: 4            # GQA
+  context_length: 1024
+  vocab_size: 16384        # 与 BPE 词表一致
+  rope_theta: 10000.0
+  rms_norm_eps: 1.0e-5
+  tie_word_embeddings: true
+  use_gradient_checkpointing: false  # OOM 时改为 true
+
+tokenizer:
+  dataset: roneneldan/TinyStories
+  vocab_size: 16384
+  min_frequency: 2
+  special_tokens:
+    bos: "<s>"
+    eos: "</s>"
+    pad: "<pad>"
+  val_ratio: 0.005         # 0.5% 验证集
+
+data:
+  num_workers: 2
+  prefetch_factor: 2
+
+train:
+  max_steps: null          # null = 跑完 1 epoch；或设具体步数
+  micro_batch_size: 16     # OOM → 8
+  grad_accum_steps: 4      # 有效 batch ≈ 64k tokens
+  learning_rate: 3.0e-4
+  min_lr: 3.0e-5
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  grad_clip: 1.0
+  warmup_steps: 1000
+  eval_interval: 500
+  log_interval: 10
+  save_interval: 500
+  keep_last_n_ckpts: 2
+
+logging:
+  use_wandb: true
+  wandb_project: nlp-llm-project
+  use_tensorboard: true
