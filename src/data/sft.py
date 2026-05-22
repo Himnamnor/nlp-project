@@ -17,10 +17,13 @@ TODO：
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Callable
+from typing import Any, cast
 
 import torch
+from datasets import Dataset as HFDataset
 from datasets import load_dataset
+from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 
 from src.tokenizer import ProjectTokenizer
@@ -57,6 +60,8 @@ class SFTDataset(Dataset):
         self.tokenizer = tokenizer
         self.max_length = max_length
         ds = load_dataset(dataset_name, split="train")
+        if not isinstance(ds, HFDataset):
+            raise TypeError(f"Expected HuggingFace Dataset, got {type(ds)}")
         if max_samples:
             ds = ds.select(range(min(max_samples, len(ds))))
         self.examples = ds
@@ -65,8 +70,12 @@ class SFTDataset(Dataset):
         return len(self.examples)
 
     def __getitem__(self, idx: int) -> dict[str, Any]:
-        ex = self.examples[idx]
-        full, prefix = format_alpaca(ex["instruction"], ex.get("input") or "", ex["output"])
+        ex = cast(dict[str, Any], self.examples[idx])
+        full, prefix = format_alpaca(
+            str(ex["instruction"]),
+            str(ex.get("input") or ""),
+            str(ex["output"]),
+        )
         full_ids = self.tokenizer.encode(full, add_eos=True)
         prefix_ids = self.tokenizer.encode(prefix, add_eos=False)
 
@@ -83,9 +92,8 @@ class SFTDataset(Dataset):
         }
 
 
-def collate_sft_batch(batch: list[dict]) -> dict[str, torch.Tensor]:
+def collate_sft_batch(batch: list[dict], pad_id: int = 0) -> dict[str, torch.Tensor]:
     """Pad batch to max length in batch."""
-    pad_id = 0  # TODO: use tokenizer.pad_id
     max_len = max(len(b["input_ids"]) for b in batch)
     input_ids, labels, attn_mask = [], [], []
     for b in batch:
@@ -97,7 +105,12 @@ def collate_sft_batch(batch: list[dict]) -> dict[str, torch.Tensor]:
             torch.cat([b["labels"], torch.full((pad_len,), -100, dtype=torch.long)])
         )
         attn_mask.append(
-            torch.cat([torch.ones(len(b["input_ids"])), torch.zeros(pad_len)])
+            torch.cat(
+                [
+                    torch.ones(len(b["input_ids"]), dtype=torch.long),
+                    torch.zeros(pad_len, dtype=torch.long),
+                ]
+            )
         )
     return {
         "input_ids": torch.stack(input_ids),
@@ -107,5 +120,23 @@ def collate_sft_batch(batch: list[dict]) -> dict[str, torch.Tensor]:
 
 
 def build_sft_dataloader(cfg: dict):
-    """TODO: wire SFTDataset + DataLoader from cfg."""
-    raise NotImplementedError
+    """Build tokenizer-backed SFT dataset and dataloader from cfg."""
+    tokenizer = ProjectTokenizer.load(cfg["paths"]["tokenizer_dir"])
+    dataset = SFTDataset(
+        tokenizer,
+        max_samples=cfg["data"].get("max_samples"),
+        max_length=cfg["data"]["max_seq_length"],
+        dataset_name=cfg["data"]["dataset"],
+    )
+    collate_fn: Callable[[list[dict]], dict[str, torch.Tensor]] = lambda batch: collate_sft_batch(
+        batch, pad_id=tokenizer.pad_id or 0
+    )
+    loader = DataLoader(
+        dataset,
+        batch_size=cfg["train"]["micro_batch_size"],
+        shuffle=True,
+        collate_fn=collate_fn,
+        num_workers=cfg["data"].get("num_workers", 0),
+        drop_last=True,
+    )
+    return tokenizer, dataset, loader

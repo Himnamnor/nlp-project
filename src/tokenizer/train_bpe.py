@@ -16,6 +16,7 @@ from typing import Any, cast
 from datasets import IterableDataset, load_dataset
 
 from tokenizers import Tokenizer
+from tokenizers.decoders import ByteLevel as ByteLevelDecoder
 from tokenizers.models import BPE
 from tokenizers.normalizers import NFKC
 from tokenizers.pre_tokenizers import ByteLevel
@@ -46,6 +47,7 @@ def train_bpe(cfg: dict, max_samples: int | None = None) -> Path:
     tokenizer = Tokenizer(BPE(unk_token="<unk>"))
     tokenizer.normalizer = NFKC()
     tokenizer.pre_tokenizer = ByteLevel(add_prefix_space=False)
+    tokenizer.decoder = ByteLevelDecoder()
 
     special = list(tok_cfg["special_tokens"].values()) + ["<unk>"]
     trainer = BpeTrainer(

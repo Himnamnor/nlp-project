@@ -92,7 +92,46 @@
 
 ## 7. 踩坑与思考
 
-<!-- loss spike / OOM / KL 失控 / 奖励 hacking 等 -->
+### 7.1 V100 + fp16 预训练发散
+
+**问题情形。** 预训练迁移到 AutoDL V100 后，由于 V100 不支持 bf16，配置改为 `float16`。初始训练在 step 1000 左右验证集 PPL 已经降到 38 附近，但继续训练后出现 loss spike：训练 loss 从稳定下降状态反弹，后续接近 9，表现为数值不稳定和疑似发散。
+
+**思考过程。** 3060/4090 上可以用 bf16，动态范围较大，不需要 loss scaling；但 V100 只能用 fp16。fp16 动态范围更窄，在大词表交叉熵和 AdamW 更新中容易出现梯度下溢或溢出。原训练循环只用了 autocast，没有使用 GradScaler，因此在 LR warmup 到峰值附近更容易触发不稳定。同时，早期日志中 train loss 的统计方式多乘了 `grad_accum`，导致观察到的训练 loss 偏大，容易和真实发散混淆。
+
+**解决方法。**
+
+- 在 `src/train/pretrain.py` 中加入 `torch.cuda.amp.GradScaler`，只在 `dtype=float16` 且 CUDA 可用时启用；bf16 训练保持不启用。
+- 按 AMP 标准顺序执行：`scaler.scale(loss).backward()` → `scaler.unscale_(optimizer)` → `clip_grad_norm_` → `scaler.step(optimizer)` → `scaler.update()`。
+- 修正训练 loss 日志：按 optimizer step 聚合真实 CE loss，避免再额外乘 `grad_accum`。
+- 将峰值 LR 从 `1.0e-4` 降到 `6.0e-5`，`min_lr` 降到 `1.0e-5`，并把 `grad_clip` 恢复到 `1.0`。
+
+**最终结果。** 修复后训练稳定推进，验证集 PPL 持续下降；最终在 step 7000 得到 `val/ppl = 5.45`，显著优于课程目标 `PPL < 40`。因此提前终止预训练，保留 `checkpoints/pretrain/best.pt` 作为后续 SFT 初始化权重。
+
+### 7.2 ByteLevel BPE 解码出现 `Ġ`
+
+**问题情形。** 使用预训练 checkpoint 生成样例时，模型输出中出现大量 `Ġ` 字符，例如：
+
+```text
+I 'm ĠTony ĠSt ark , Ġit 's Ġa Ġspecial Ġtreat Ġfor Ġyou !"
+```
+
+该输出并非完全乱码，模型能延续 prompt，但空格被显示成 ByteLevel BPE 的内部标记，不能直接作为报告中的生成样例。
+
+**思考过程。** tokenizer 训练时使用了 `ByteLevel(add_prefix_space=False)` 作为 pre-tokenizer。ByteLevel BPE 会用类似 `Ġ` 的符号表示词前空格；如果保存的 tokenizer 没有配置对应的 ByteLevel decoder，`decode()` 时就不会把这些内部符号还原成普通空格。该问题属于 tokenizer 序列化配置缺失，不是模型权重或 PPL 指标异常。由于只缺 decoder，词表和 token id 映射不需要改变，不能重训 tokenizer，否则会破坏与已训练 `best.pt` 的兼容性。
+
+**解决方法。**
+
+- 在 `src/tokenizer/train_bpe.py` 中为未来训练出的 tokenizer 增加：
+
+```python
+from tokenizers.decoders import ByteLevel as ByteLevelDecoder
+
+tokenizer.decoder = ByteLevelDecoder()
+```
+
+- 对现有 `tokenizer/tokenizer.json` 进行原地修复：加载已有 tokenizer，补上 `ByteLevelDecoder()`，再保存回同一路径。该操作只改变 decode 规则，不改变词表和 token id，因此与现有预训练 checkpoint 兼容。
+
+**最终结果。** 修复后，`ProjectTokenizer.decode()` 可以把 `Ġ` 正常还原为空格。后续生成样例可重新运行 `python -m src.eval.generate --config configs/pretrain.yaml --prompt "Once upon a time"`，将无 `Ġ` 的文本放入报告生成样例部分。
 
 ## 8. 参考文献
 

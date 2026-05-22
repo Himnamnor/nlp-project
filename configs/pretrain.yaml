@@ -16,6 +16,7 @@ paths:
   val_bin: data/processed/val.bin
   checkpoint_dir: checkpoints/pretrain/
   log_dir: logs/pretrain/
+  samples_path: samples/pretrain/ # pretrain 样本测试
 
 model:
   n_layer: 6

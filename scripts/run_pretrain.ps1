@@ -3,6 +3,8 @@ param(
     [string]$Config = "configs/pretrain.yaml"
 )
 $ErrorActionPreference = "Stop"
+# Avoid OpenMP crash when PyTorch + MKL both load libiomp5md.dll (Windows Conda)
+$env:KMP_DUPLICATE_LIB_OK = "TRUE"
 Set-Location (Split-Path $PSScriptRoot -Parent)
 & .\.venv\Scripts\Activate.ps1
 

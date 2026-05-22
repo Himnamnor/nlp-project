@@ -1,0 +1,7 @@
+step 10:    unrecorded  loss=9.77
+step 500:   70.57       loss=4.31
+step 1000:  18.44       loss=2.91
+step 1500:  11.88       loss=2.46
+step 3000:  7.44        loss=1.96
+step 5000:  6.04        loss=1.76
+step 7000:  5.45        loss=1.68
