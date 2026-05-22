@@ -17,6 +17,7 @@ from pathlib import Path
 
 import torch
 
+from src.data.sft import format_alpaca
 from src.model.llama import build_llama_from_config
 from src.tokenizer import ProjectTokenizer
 from src.utils.config import add_config_args, parse_config_from_args
@@ -58,11 +59,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Generate text samples")
     add_config_args(parser)
     parser.add_argument("--prompt", type=str, default="Once upon a time")
+    parser.add_argument("--instruction", type=str, default=None)
+    parser.add_argument("--input", type=str, default="")
     parser.add_argument("--ckpt", type=str, default=None, help="Checkpoint path to load")
     parser.add_argument("--output", type=str, default=None, help="Where to save generated samples")
     args = parser.parse_args()
     cfg = parse_config_from_args(args)
-    print(f"Generate skeleton: prompt={args.prompt!r}")
+    prompt = args.prompt
+    if args.instruction is not None:
+        _, prompt = format_alpaca(args.instruction, args.input, "")
+    print(f"Generate skeleton: prompt={prompt!r}")
 
     tokenizer = ProjectTokenizer.load(cfg["paths"]["tokenizer_dir"])
     model = build_llama_from_config(cfg)
@@ -72,7 +78,7 @@ def main() -> None:
     load_model_weights(ckpt_path, model)
     model.eval()
 
-    output = generate_from_prompt(model, tokenizer, args.prompt)
+    output = generate_from_prompt(model, tokenizer, prompt)
     print(f"Generated output: {output}")
     output_path = Path(args.output or Path(cfg["paths"]["log_dir"]) / "samples.txt")
     save_samples([output], output_path)

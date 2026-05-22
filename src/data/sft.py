@@ -79,15 +79,20 @@ class SFTDataset(Dataset):
         full_ids = self.tokenizer.encode(full, add_eos=True)
         prefix_ids = self.tokenizer.encode(prefix, add_eos=False)
 
-        # Truncate
         full_ids = full_ids[: self.max_length]
-        labels = full_ids.copy()
-        # Mask prompt prefix
-        n_prefix = min(len(prefix_ids), len(labels))
-        labels[:n_prefix] = [-100] * n_prefix
+        if len(full_ids) < 2:
+            full_ids = full_ids + [self.tokenizer.eos_id or 0]
+
+        input_ids = full_ids[:-1]
+        labels = full_ids[1:].copy()
+
+        # labels[i] is token i+1. Mask targets before the response starts,
+        # but keep the first response token as a supervised target.
+        n_mask = max(min(len(prefix_ids), len(full_ids)) - 1, 0)
+        labels[:n_mask] = [-100] * n_mask
 
         return {
-            "input_ids": torch.tensor(full_ids, dtype=torch.long),
+            "input_ids": torch.tensor(input_ids, dtype=torch.long),
             "labels": torch.tensor(labels, dtype=torch.long),
         }
 
