@@ -9,10 +9,10 @@ project:
 
 paths:
   tokenizer_dir: tokenizer/
-  pretrain_ckpt: checkpoints/pretrain/best.pt
-  checkpoint_dir: checkpoints/sft_full/
-  log_dir: logs/sft_full/
-  eval_samples: logs/sft_full/eval_samples.jsonl
+  pretrain_ckpt: checkpoints/pretrain_smol/best.pt
+  checkpoint_dir: checkpoints/sft_smol_full/
+  log_dir: logs/sft_smol_full/
+  eval_samples: logs/sft_smol_full/eval_samples.jsonl
 
 model:
   # 与 pretrain 一致；加载 pretrain_ckpt 后覆盖
