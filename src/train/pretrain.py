@@ -22,7 +22,7 @@ from torch.utils.data import DataLoader
 from src.data.pretrain import PretrainDataset
 from src.eval.ppl import compute_ppl
 from src.model.llama import build_llama_from_config
-from src.utils.checkpoint import prune_old_checkpoints, save_checkpoint
+from src.utils.checkpoint import load_model_weights, prune_old_checkpoints, save_checkpoint
 from src.utils.config import add_config_args, parse_config_from_args
 from src.utils.logging import init_logger
 
@@ -60,6 +60,10 @@ def train(cfg: dict) -> None:
     ckpt_dir.mkdir(parents=True, exist_ok=True)
 
     model = build_llama_from_config(cfg).to(device)
+    init_from = cfg["paths"].get("init_from")
+    if init_from:
+        load_model_weights(init_from, model)
+        print(f"Initialized model weights from {init_from}")
     if cfg["model"].get("use_gradient_checkpointing"):
         model.model.config.use_gradient_checkpointing = True
 

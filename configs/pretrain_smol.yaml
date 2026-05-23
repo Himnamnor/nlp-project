@@ -1,0 +1,67 @@
+# configs/pretrain_smol.yaml
+# 用途：从 TinyStories best.pt 继续在 SmolLM-Corpus 子集上预训练
+# 注意：独立 data/checkpoint/log 路径，不覆盖原 checkpoints/pretrain/best.pt
+
+project:
+  name: llama-mini-continued-pretrain-smol
+  seed: 42
+  device: cuda
+  dtype: float16          # V100 不支持 bf16；训练脚本会启用 GradScaler
+  compile: false
+
+paths:
+  tokenizer_dir: tokenizer/
+  init_from: checkpoints/pretrain/best.pt
+  data_dir: data/processed_smol/
+  train_bin: data/processed_smol/train.bin
+  val_bin: data/processed_smol/val.bin
+  checkpoint_dir: checkpoints/pretrain_smol/
+  log_dir: logs/pretrain_smol/
+
+model:
+  n_layer: 6
+  d_model: 512
+  n_heads: 8
+  n_kv_heads: 4
+  context_length: 1024
+  vocab_size: 16384
+  rope_theta: 10000.0
+  rms_norm_eps: 1.0e-5
+  tie_word_embeddings: true
+  use_gradient_checkpointing: false
+
+tokenizer:
+  # 可选 config 视 HuggingFaceTB/smollm-corpus 当前可用子集而定；
+  # 若该 config 名不可用，可先用 `datasets.get_dataset_config_names(...)` 查看。
+  dataset: HuggingFaceTB/smollm-corpus
+  dataset_config: cosmopedia-v2
+  split: train
+  text_field: text
+  max_tokens: 50000000     # 先抽 50M token；可改 100000000
+  vocab_size: 16384
+  val_ratio: 0.005
+
+data:
+  num_workers: 2
+  prefetch_factor: 2
+
+train:
+  max_steps: 3000
+  micro_batch_size: 32
+  grad_accum_steps: 2
+  learning_rate: 3.0e-5
+  min_lr: 1.0e-5
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  grad_clip: 1.0
+  warmup_steps: 200
+  eval_interval: 500
+  log_interval: 10
+  save_interval: 500
+  keep_last_n_ckpts: 2
+
+logging:
+  use_wandb: true
+  wandb_project: nlp-llm-project
+  use_tensorboard: true

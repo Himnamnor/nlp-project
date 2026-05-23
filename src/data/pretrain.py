@@ -29,7 +29,11 @@ from src.utils.config import add_config_args, parse_config_from_args
 _BIN_MAGIC = b"LLMTOK01"
 
 
-def prepare_bin(cfg: dict, max_samples: int | None = None) -> tuple[Path, Path]:
+def prepare_bin(
+    cfg: dict,
+    max_samples: int | None = None,
+    max_tokens: int | None = None,
+) -> tuple[Path, Path]:
     """
     Tokenize TinyStories and write memmap binaries.
 
@@ -40,10 +44,18 @@ def prepare_bin(cfg: dict, max_samples: int | None = None) -> tuple[Path, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     train_path = Path(cfg["paths"]["train_bin"])
     val_path = Path(cfg["paths"]["val_bin"])
-    val_ratio = cfg["tokenizer"].get("val_ratio", 0.005)
+    tok_cfg = cfg["tokenizer"]
+    val_ratio = tok_cfg.get("val_ratio", 0.005)
+    text_field = tok_cfg.get("text_field", "text")
+    max_tokens = max_tokens or tok_cfg.get("max_tokens")
 
-    print(f"Loading {cfg['tokenizer']['dataset']} ...")
-    ds = load_dataset(cfg["tokenizer"]["dataset"], split="train")
+    print(f"Loading {tok_cfg['dataset']} ...")
+    dataset_config = tok_cfg.get("dataset_config")
+    split = tok_cfg.get("split", "train")
+    if dataset_config:
+        ds = load_dataset(tok_cfg["dataset"], dataset_config, split=split)
+    else:
+        ds = load_dataset(tok_cfg["dataset"], split=split)
     if not isinstance(ds, HFDataset):
         raise TypeError(f"Expected Dataset, got {type(ds)}")
 
@@ -52,7 +64,13 @@ def prepare_bin(cfg: dict, max_samples: int | None = None) -> tuple[Path, Path]:
         if max_samples is not None and i >= max_samples:
             break
         item = cast(dict[str, Any], row)
-        all_ids.extend(tok.encode(str(item["text"]), add_eos=True))
+        if text_field not in item or item[text_field] is None:
+            continue
+        ids = tok.encode(str(item[text_field]), add_eos=True)
+        if max_tokens is not None and len(all_ids) + len(ids) > max_tokens:
+            all_ids.extend(ids[: max_tokens - len(all_ids)])
+            break
+        all_ids.extend(ids)
         if (i + 1) % 10000 == 0:
             print(f"  tokenized {i + 1:,} stories, {len(all_ids):,} tokens ...")
 
@@ -122,10 +140,16 @@ def main() -> None:
         default=None,
         help="Use only first N stories for quick debug (default: all)",
     )
+    parser.add_argument(
+        "--max_tokens",
+        type=int,
+        default=None,
+        help="Stop after approximately N tokens (default: tokenizer.max_tokens or all)",
+    )
     args = parser.parse_args()
     cfg = parse_config_from_args(args)
     if args.prepare:
-        prepare_bin(cfg, max_samples=args.max_samples)
+        prepare_bin(cfg, max_samples=args.max_samples, max_tokens=args.max_tokens)
     else:
         print("Use --prepare to tokenize and write .bin files")
 
