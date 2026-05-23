@@ -37,7 +37,8 @@ tokenizer:
   dataset_config: cosmopedia-v2
   split: train
   text_field: text
-  max_tokens: 50000000     # 先抽 50M token；可改 100000000
+  streaming: true          # 大语料必须 streaming，避免下载全部 parquet 分片
+  max_tokens: 10000000     # 先抽 10M token smoke；跑通后可改 50000000
   vocab_size: 16384
   val_ratio: 0.005
 

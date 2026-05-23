@@ -20,6 +20,7 @@ from typing import Any, cast
 import numpy as np
 import torch
 from datasets import Dataset as HFDataset
+from datasets import IterableDataset as HFIterableDataset
 from datasets import load_dataset
 from torch.utils.data import Dataset
 
@@ -52,11 +53,12 @@ def prepare_bin(
     print(f"Loading {tok_cfg['dataset']} ...")
     dataset_config = tok_cfg.get("dataset_config")
     split = tok_cfg.get("split", "train")
+    streaming = bool(tok_cfg.get("streaming", False))
     if dataset_config:
-        ds = load_dataset(tok_cfg["dataset"], dataset_config, split=split)
+        ds = load_dataset(tok_cfg["dataset"], dataset_config, split=split, streaming=streaming)
     else:
-        ds = load_dataset(tok_cfg["dataset"], split=split)
-    if not isinstance(ds, HFDataset):
+        ds = load_dataset(tok_cfg["dataset"], split=split, streaming=streaming)
+    if not isinstance(ds, (HFDataset, HFIterableDataset)):
         raise TypeError(f"Expected Dataset, got {type(ds)}")
 
     all_ids: list[int] = []
