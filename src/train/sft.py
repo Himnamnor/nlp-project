@@ -65,9 +65,14 @@ def train(cfg: dict) -> None:
     model = build_llama_from_config(cfg).to(device)
     load_model_weights(cfg["paths"]["pretrain_ckpt"], model)
 
-    n_layers = cfg["sft"].get("trainable_layers", "last_2")
-    if n_layers == "last_2":
+    trainable_layers = cfg["sft"].get("trainable_layers", "last_2")
+    if trainable_layers == "last_2":
         model.freeze_all_but_last_n_layers(2)
+    elif trainable_layers == "full":
+        for p in model.parameters():
+            p.requires_grad = True
+    else:
+        raise ValueError(f"Unsupported sft.trainable_layers: {trainable_layers}")
 
     trainable, total = model.count_trainable_params()
     print(f"Trainable params: {trainable:,} / {total:,} ({100*trainable/total:.2f}%)")

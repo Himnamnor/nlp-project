@@ -1,8 +1,8 @@
 # configs/sft.yaml
-# 用途：指令微调（Alpaca-Cleaned，仅微调最后 2 层）
+# 用途：指令微调（Alpaca-Cleaned，全量 SFT；last-2 结果保留作对照）
 
 project:
-  name: llama-mini-sft
+  name: llama-mini-sft-full
   seed: 42
   device: cuda
   dtype: float16          # V100 不支持 bf16；fp16 训练由 GradScaler 保护
@@ -10,9 +10,9 @@ project:
 paths:
   tokenizer_dir: tokenizer/
   pretrain_ckpt: checkpoints/pretrain/best.pt
-  checkpoint_dir: checkpoints/sft/
-  log_dir: logs/sft/
-  eval_samples: logs/sft/eval_samples.jsonl
+  checkpoint_dir: checkpoints/sft_full/
+  log_dir: logs/sft_full/
+  eval_samples: logs/sft_full/eval_samples.jsonl
 
 model:
   # 与 pretrain 一致；加载 pretrain_ckpt 后覆盖
@@ -33,21 +33,21 @@ data:
 
 sft:
   prompt_template: alpaca  # ### Instruction / Input / Response
-  trainable_layers: last_2   # 作业要求：仅最后 2 层 + final norm + lm_head
+  trainable_layers: full     # full = 全量 SFT；last_2 = 课程要求对照实验
   freeze_embedding: false    # tied embedding 会随 lm_head 更新；对照实验可设 true + untie
 
 train:
   num_epochs: 4
   micro_batch_size: 8
   grad_accum_steps: 4
-  learning_rate: 5.0e-5
+  learning_rate: 2.0e-5      # 全量 SFT 更保守，避免破坏 TinyStories 预训练能力
   weight_decay: 0.01
   grad_clip: 1.0
   warmup_ratio: 0.03
   eval_interval: 200
   log_interval: 10
   save_interval: 500
-  max_steps: 5000
+  max_steps: 6000
 
 logging:
   use_wandb: true

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from datetime import datetime
 
 import torch
 
@@ -44,15 +45,33 @@ def generate_from_prompt(
         top_p=top_p,
         eos_token_id=tokenizer.eos_id,
     )
-    return tokenizer.decode(outputs[0].tolist())
+    new_tokens = outputs[0, input_ids.shape[1] :].tolist()
+    return tokenizer.decode(new_tokens)
 
 
-def save_samples(samples: list[str], out_path: Path) -> None:
+def save_sample(
+    sample: str,
+    out_path: Path,
+    prompt: str,
+    ckpt_path: str,
+    temperature: float,
+    top_p: float,
+    max_new_tokens: int,
+) -> None:
+    """Append one generated sample with enough context for later report writing."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_path, "w", encoding="utf-8") as f:
-        for i, s in enumerate(samples):
-            f.write(f"=== Sample {i+1} ===\n{s}\n\n")
-    print(f"Saved {len(samples)} samples → {out_path}")
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open(out_path, "a", encoding="utf-8") as f:
+        f.write(f"=== Sample @ {timestamp} ===\n")
+        f.write(f"checkpoint: {ckpt_path}\n")
+        f.write(
+            f"temperature: {temperature}, top_p: {top_p}, max_new_tokens: {max_new_tokens}\n"
+        )
+        f.write("prompt:\n")
+        f.write(prompt.rstrip() + "\n\n")
+        f.write("output:\n")
+        f.write(sample.rstrip() + "\n\n")
+    print(f"Appended sample → {out_path}")
 
 
 def main() -> None:
@@ -61,6 +80,9 @@ def main() -> None:
     parser.add_argument("--prompt", type=str, default="Once upon a time")
     parser.add_argument("--instruction", type=str, default=None)
     parser.add_argument("--input", type=str, default="")
+    parser.add_argument("--max_new_tokens", type=int, default=128)
+    parser.add_argument("--temperature", type=float, default=0.7)
+    parser.add_argument("--top_p", type=float, default=0.9)
     parser.add_argument("--ckpt", type=str, default=None, help="Checkpoint path to load")
     parser.add_argument("--output", type=str, default=None, help="Where to save generated samples")
     args = parser.parse_args()
@@ -72,16 +94,31 @@ def main() -> None:
 
     tokenizer = ProjectTokenizer.load(cfg["paths"]["tokenizer_dir"])
     model = build_llama_from_config(cfg)
-    device = torch.device(cfg["project"]["device"])
+    device = torch.device(cfg["project"]["device"] if torch.cuda.is_available() else "cpu")
     model.to(device)
     ckpt_path = args.ckpt or str(Path(cfg["paths"]["checkpoint_dir"]) / "best.pt")
     load_model_weights(ckpt_path, model)
     model.eval()
 
-    output = generate_from_prompt(model, tokenizer, prompt)
+    output = generate_from_prompt(
+        model,
+        tokenizer,
+        prompt,
+        max_new_tokens=args.max_new_tokens,
+        temperature=args.temperature,
+        top_p=args.top_p,
+    )
     print(f"Generated output: {output}")
     output_path = Path(args.output or Path(cfg["paths"]["log_dir"]) / "samples.txt")
-    save_samples([output], output_path)
+    save_sample(
+        output,
+        output_path,
+        prompt=prompt,
+        ckpt_path=ckpt_path,
+        temperature=args.temperature,
+        top_p=args.top_p,
+        max_new_tokens=args.max_new_tokens,
+    )
 
 
 if __name__ == "__main__":
