@@ -187,7 +187,9 @@ def pad_rollout_sequences(
     input_ids, attention_mask, response_mask = [], [], []
     for seq, prompt_len in zip(sequences, prompt_lens):
         pad_len = max_len - seq.numel()
-        padded = torch.cat([seq, torch.full((pad_len,), pad_id, dtype=torch.long)])
+        padded = torch.cat(
+            [seq, torch.full((pad_len,), pad_id, dtype=torch.long, device=seq.device)]
+        )
         attn = torch.cat(
             [
                 torch.ones(seq.numel(), dtype=torch.long, device=seq.device),
