@@ -1,15 +1,15 @@
 # configs/reward.yaml
-# 用途：奖励模型训练（PKU-SafeRLHF 偏好对 + LoRA）
+# 用途：奖励模型训练（PKU-SafeRLHF 偏好对 + Bradley-Terry pairwise loss）
 
 project:
   name: llama-mini-reward
   seed: 42
   device: cuda
-  dtype: bfloat16
+  dtype: float16          # V100 不支持 bf16；fp16 + GradScaler
 
 paths:
   tokenizer_dir: tokenizer/
-  sft_ckpt: checkpoints/sft/best.pt
+  sft_ckpt: checkpoints/sft_smol_full/best.pt  # 复用最新全量 SFT
   checkpoint_dir: checkpoints/reward/
   log_dir: logs/reward/
 
@@ -20,30 +20,29 @@ model:
   n_kv_heads: 4
   context_length: 1024
   vocab_size: 16384
+  tie_word_embeddings: true
 
 data:
   dataset: PKU-Alignment/PKU-SafeRLHF
-  max_length: 1024
+  split: train
+  max_samples: 20000       # 控制 reward 训练时长；全量 ~330k 行
+  max_length: 512
   val_ratio: 0.05
-
-lora:
-  r: 8
-  lora_alpha: 16
-  lora_dropout: 0.05
-  target_modules:
-    - q_proj
-    - k_proj
-    - v_proj
-    - o_proj
+  num_workers: 2
 
 train:
-  num_epochs: 2
+  num_epochs: 1
   batch_size: 4
-  learning_rate: 1.0e-4
+  learning_rate: 5.0e-5
   weight_decay: 0.01
-  eval_interval: 100
-  target_pairwise_acc: 0.65
+  warmup_ratio: 0.03
+  grad_clip: 1.0
+  log_interval: 20
+  eval_interval: 200
+  save_interval: 500
+  max_steps: null
+  target_pairwise_acc: 0.60
 
 logging:
-  use_wandb: true
+  use_wandb: false
   wandb_project: nlp-llm-project

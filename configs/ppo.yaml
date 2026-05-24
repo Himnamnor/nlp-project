@@ -1,16 +1,16 @@
 # configs/ppo.yaml
-# 用途：PPO 强化学习（TRL + LoRA，3060 显存优化配置）
+# 用途：手写 PPO RLHF（policy + value head + frozen ref + reward model）
 
 project:
   name: llama-mini-ppo
   seed: 42
   device: cuda
-  dtype: bfloat16
+  dtype: float16          # 与 SFT/Reward 一致；fp16 + GradScaler
 
 paths:
   tokenizer_dir: tokenizer/
-  sft_ckpt: checkpoints/sft/best.pt
-  reward_ckpt: checkpoints/reward/
+  sft_ckpt: checkpoints/sft_smol_full/best.pt
+  reward_ckpt: checkpoints/reward/           # 既支持目录(自动找 best.pt)，也支持具体文件
   checkpoint_dir: checkpoints/ppo/
   log_dir: logs/ppo/
 
@@ -21,36 +21,37 @@ model:
   n_kv_heads: 4
   context_length: 1024
   vocab_size: 16384
-
-lora:
-  r: 8
-  lora_alpha: 16
-  lora_dropout: 0.05
-  target_modules:
-    - q_proj
-    - v_proj
+  tie_word_embeddings: true
 
 data:
   dataset: PKU-Alignment/PKU-SafeRLHF
-  num_prompts: 2000
+  split: train
+  num_prompts: 1000
   unsafe_ratio: 0.7        # 不安全 prompt 占比
+  max_prompt_length: 256
+  num_workers: 0
 
 ppo:
-  batch_size: 8
-  mini_batch_size: 2
-  ppo_epochs: 4
+  batch_size: 8            # 每次 rollout 收集的 prompt 数
+  mini_batch_size: 2       # PPO 内层 mini-batch
+  ppo_epochs: 4            # PPO 内层 epoch 数（重用 rollout）
   learning_rate: 1.0e-5
-  init_kl_coef: 0.1
-  target_kl: 6.0
+  weight_decay: 0.0
+  init_kl_coef: 0.1        # 每 token KL 惩罚系数（不自适应；如需自适应在代码里加 controller）
   cliprange: 0.2
   cliprange_value: 0.2
-  gamma: 1.0
+  vf_coef: 0.5
+  entropy_coef: 0.0
+  grad_clip: 1.0
+  gamma: 1.0               # 文本 RL 常用 1.0
   lam: 0.95
   max_new_tokens: 96
   temperature: 1.0
   top_p: 0.9
-  total_steps: 500
+  total_steps: 200         # rollout 次数；200 步 × 8 prompt = 1600 样本
+  log_interval: 1
+  save_interval: 50
 
 logging:
-  use_wandb: true
+  use_wandb: false
   wandb_project: nlp-llm-project
