@@ -1,15 +1,17 @@
 # configs/dpo.yaml
-# 用途：DPO 对照实验（advanced/，无需奖励模型）
+# 用途：DPO 对照实验（advanced 主线）
+# 与 PPO 相同的 PKU-SafeRLHF 偏好对，但直接在 policy 上做 Bradley-Terry 风格优化，
+# 无需 reward model、无需在线 rollout。手写实现，不依赖 TRL。
 
 project:
   name: llama-mini-dpo
   seed: 42
   device: cuda
-  dtype: bfloat16
+  dtype: float16          # 与 SFT/Reward/PPO 一致；fp16 + GradScaler
 
 paths:
   tokenizer_dir: tokenizer/
-  sft_ckpt: checkpoints/sft/best.pt
+  sft_ckpt: checkpoints/sft_smol_full/best.pt
   checkpoint_dir: checkpoints/dpo/
   log_dir: logs/dpo/
 
@@ -20,27 +22,31 @@ model:
   n_kv_heads: 4
   context_length: 1024
   vocab_size: 16384
+  tie_word_embeddings: true
 
 data:
   dataset: PKU-Alignment/PKU-SafeRLHF
-  max_length: 1024
+  split: train
+  max_samples: 20000       # 与 reward 阶段保持同规模，便于 PPO/DPO 对照
+  max_length: 512
   val_ratio: 0.05
-
-lora:
-  r: 8
-  lora_alpha: 16
-  target_modules:
-    - q_proj
-    - v_proj
+  num_workers: 2
 
 dpo:
-  beta: 0.1
+  beta: 0.1                # 越大越靠近 ref；论文常用 0.1-0.5；小模型先用 0.1
+
+train:
   num_epochs: 1
-  batch_size: 4
+  batch_size: 4            # 注意：DPO 每步要做 4 次前向（policy×2 + ref×2）
   learning_rate: 5.0e-6
-  max_prompt_length: 512
-  max_length: 1024
+  weight_decay: 0.0
+  warmup_ratio: 0.03
+  grad_clip: 1.0
+  log_interval: 20
+  eval_interval: 200
+  save_interval: 500
+  max_steps: null
 
 logging:
-  use_wandb: true
+  use_wandb: false
   wandb_project: nlp-llm-project

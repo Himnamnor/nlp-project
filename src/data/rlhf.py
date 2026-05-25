@@ -282,3 +282,145 @@ def build_prompt_dataset(cfg: dict, tokenizer: ProjectTokenizer) -> PromptDatase
         prompts,
         max_prompt_length=int(data_cfg.get("max_prompt_length", 256)),
     )
+
+
+# ---------------------------------------------------------------------------
+# DPO dataset (preference pairs + response-only token mask)
+# ---------------------------------------------------------------------------
+
+
+class DPOPairDataset(Dataset):
+    """Preference pairs with explicit response masks for DPO.
+
+    Each item gives (prompt+chosen) and (prompt+rejected) token ids, plus a binary mask
+    marking which tokens belong to the response (i.e. count toward the DPO log-prob sum).
+    The mask follows the convention: response_mask[t] = 1 iff input_ids[t] is a response token.
+    During training we only sum log-probs over positions where response_mask shifted by 1 is on.
+    """
+
+    def __init__(
+        self,
+        tokenizer: ProjectTokenizer,
+        dataset_name: str,
+        split: str = "train",
+        max_samples: int | None = None,
+        max_length: int = 512,
+    ) -> None:
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+        ds = load_safe_rlhf(dataset_name, split=split)
+        if max_samples is not None and max_samples < len(ds):
+            ds = ds.select(range(max_samples))
+        self.ds = ds
+
+    def __len__(self) -> int:
+        return len(self.ds)
+
+    def _encode_pair(
+        self, prompt_text: str, response: str
+    ) -> tuple[list[int], list[int]]:
+        """Return (full_ids, response_mask) for prompt+response."""
+        prompt_ids = self.tokenizer.encode(prompt_text, add_bos=False, add_eos=False)
+        full_ids = self.tokenizer.encode(prompt_text + response, add_bos=False, add_eos=True)
+        full_ids = full_ids[: self.max_length]
+        # 至少保留 1 个 response 位置，否则 DPO loss 没有信号
+        prompt_len = min(len(prompt_ids), max(self.max_length - 1, 1))
+        if len(full_ids) < prompt_len + 1:
+            full_ids = full_ids + [self.tokenizer.eos_id or 0]
+        response_mask = [0] * prompt_len + [1] * (len(full_ids) - prompt_len)
+        return full_ids, response_mask
+
+    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
+        ex = cast(dict[str, Any], self.ds[idx])
+        pair = build_preference_pair(ex)
+        prompt_text = format_rlhf_prompt(pair["prompt"])
+        chosen_ids, chosen_resp_mask = self._encode_pair(prompt_text, pair["chosen"])
+        rejected_ids, rejected_resp_mask = self._encode_pair(prompt_text, pair["rejected"])
+        return {
+            "chosen_ids": torch.tensor(chosen_ids, dtype=torch.long),
+            "chosen_response_mask": torch.tensor(chosen_resp_mask, dtype=torch.long),
+            "rejected_ids": torch.tensor(rejected_ids, dtype=torch.long),
+            "rejected_response_mask": torch.tensor(rejected_resp_mask, dtype=torch.long),
+        }
+
+
+def collate_dpo_batch(
+    batch: list[dict[str, torch.Tensor]], pad_id: int = 0
+) -> dict[str, torch.Tensor]:
+    """Right-pad both branches separately; keep attention masks + response masks aligned."""
+    max_len = max(
+        max(b["chosen_ids"].size(0) for b in batch),
+        max(b["rejected_ids"].size(0) for b in batch),
+    )
+
+    def pad_branch(
+        ids_list: list[torch.Tensor], resp_list: list[torch.Tensor]
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        ids_out, attn_out, resp_out = [], [], []
+        for ids, resp in zip(ids_list, resp_list):
+            pad_len = max_len - ids.size(0)
+            pads = torch.full((pad_len,), pad_id, dtype=torch.long)
+            zeros = torch.zeros(pad_len, dtype=torch.long)
+            ids_out.append(torch.cat([ids, pads]))
+            attn_out.append(
+                torch.cat([torch.ones(ids.size(0), dtype=torch.long), zeros])
+            )
+            resp_out.append(torch.cat([resp, zeros]))
+        return torch.stack(ids_out), torch.stack(attn_out), torch.stack(resp_out)
+
+    chosen_ids, chosen_attn, chosen_resp = pad_branch(
+        [b["chosen_ids"] for b in batch],
+        [b["chosen_response_mask"] for b in batch],
+    )
+    rejected_ids, rejected_attn, rejected_resp = pad_branch(
+        [b["rejected_ids"] for b in batch],
+        [b["rejected_response_mask"] for b in batch],
+    )
+    return {
+        "chosen_ids": chosen_ids,
+        "chosen_attn": chosen_attn,
+        "chosen_response_mask": chosen_resp,
+        "rejected_ids": rejected_ids,
+        "rejected_attn": rejected_attn,
+        "rejected_response_mask": rejected_resp,
+    }
+
+
+def build_dpo_dataloaders(
+    cfg: dict, tokenizer: ProjectTokenizer
+) -> tuple[DataLoader, DataLoader]:
+    data_cfg = cfg["data"]
+    full = DPOPairDataset(
+        tokenizer=tokenizer,
+        dataset_name=data_cfg["dataset"],
+        split=data_cfg.get("split", "train"),
+        max_samples=data_cfg.get("max_samples"),
+        max_length=int(data_cfg.get("max_length", 512)),
+    )
+    val_ratio = float(data_cfg.get("val_ratio", 0.05))
+    n_val = max(1, int(len(full) * val_ratio))
+    n_train = len(full) - n_val
+    seed = int(cfg["project"]["seed"])
+    train_ds, val_ds = random_split(
+        full,
+        [n_train, n_val],
+        generator=torch.Generator().manual_seed(seed),
+    )
+    pad_id = tokenizer.pad_id if tokenizer.pad_id is not None else 0
+    collate = lambda batch: collate_dpo_batch(batch, pad_id=pad_id)
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=cfg["train"]["batch_size"],
+        shuffle=True,
+        collate_fn=collate,
+        num_workers=int(data_cfg.get("num_workers", 0)),
+        drop_last=True,
+    )
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=cfg["train"]["batch_size"],
+        shuffle=False,
+        collate_fn=collate,
+        num_workers=int(data_cfg.get("num_workers", 0)),
+    )
+    return train_loader, val_loader

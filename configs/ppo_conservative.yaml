@@ -1,0 +1,66 @@
+# configs/ppo_conservative.yaml
+# 用途：advanced 消融——保守 PPO，旨在缓解原 PPO 的 KL 失控 / 语言退化
+#
+# 与 configs/ppo.yaml 的差异：
+#   learning_rate:  1e-5  -> 5e-6   （更小步更新，policy drift 更慢）
+#   init_kl_coef:   0.1   -> 0.3    （更强 KL 约束）
+#   total_steps:    200   -> 50     （早停，避免后期退化）
+#   max_new_tokens: 96    -> 64     （短回答更可读）
+#   ppo_epochs:     4     -> 2      （减少重复利用 rollout 带来的分布漂移）
+#
+# 其它字段完全沿用主 PPO 配置；输出落到 checkpoints/ppo_conservative/ 不会覆盖主 PPO 结果。
+
+project:
+  name: llama-mini-ppo-conservative
+  seed: 42
+  device: cuda
+  dtype: float16
+
+paths:
+  tokenizer_dir: tokenizer/
+  sft_ckpt: checkpoints/sft_smol_full/best.pt
+  reward_ckpt: checkpoints/reward/
+  checkpoint_dir: checkpoints/ppo_conservative/
+  log_dir: logs/ppo_conservative/
+
+model:
+  n_layer: 6
+  d_model: 512
+  n_heads: 8
+  n_kv_heads: 4
+  context_length: 1024
+  vocab_size: 16384
+  tie_word_embeddings: true
+
+data:
+  dataset: PKU-Alignment/PKU-SafeRLHF
+  split: train
+  num_prompts: 1000
+  unsafe_ratio: 0.7
+  max_prompt_length: 256
+  num_workers: 0
+
+ppo:
+  batch_size: 8
+  mini_batch_size: 2
+  ppo_epochs: 2            # ↓ 2 (主 PPO 是 4)
+  learning_rate: 5.0e-6    # ↓ 5e-6 (主 PPO 是 1e-5)
+  weight_decay: 0.0
+  init_kl_coef: 0.3        # ↑ 0.3 (主 PPO 是 0.1)
+  cliprange: 0.2
+  cliprange_value: 0.2
+  vf_coef: 0.5
+  entropy_coef: 0.0
+  grad_clip: 1.0
+  gamma: 1.0
+  lam: 0.95
+  max_new_tokens: 64       # ↓ 64 (主 PPO 是 96)
+  temperature: 1.0
+  top_p: 0.9
+  total_steps: 50          # ↓ 50 (主 PPO 是 200)
+  log_interval: 1
+  save_interval: 25
+
+logging:
+  use_wandb: false
+  wandb_project: nlp-llm-project
