@@ -1,0 +1,59 @@
+# configs/ppo_general.yaml
+# 用途：泛化模型的手写 PPO RLHF
+
+project:
+  name: llama-general-90m-ppo
+  seed: 42
+  device: cuda
+  dtype: bfloat16
+
+paths:
+  tokenizer_dir: tokenizer_general/
+  sft_ckpt: checkpoints/sft_general_full/best.pt
+  reward_ckpt: checkpoints/reward_general/
+  checkpoint_dir: checkpoints/ppo_general/
+  log_dir: logs/ppo_general/
+
+model:
+  n_layer: 10
+  d_model: 768
+  n_heads: 12
+  n_kv_heads: 4
+  context_length: 1024
+  vocab_size: 32768
+  tie_word_embeddings: true
+
+data:
+  dataset: PKU-Alignment/PKU-SafeRLHF
+  split: train
+  num_prompts: 2000
+  unsafe_ratio: 0.7
+  max_prompt_length: 256
+  num_workers: 0
+
+ppo:
+  batch_size: 8
+  mini_batch_size: 2
+  ppo_epochs: 3
+  learning_rate: 7.0e-6
+  weight_decay: 0.0
+  init_kl_coef: 0.2
+  target_kl: 1.0
+  kl_horizon: 10000
+  cliprange: 0.2
+  cliprange_value: 0.2
+  vf_coef: 0.5
+  entropy_coef: 0.0
+  grad_clip: 1.0
+  gamma: 1.0
+  lam: 0.95
+  max_new_tokens: 96
+  temperature: 0.9
+  top_p: 0.9
+  total_steps: 300
+  log_interval: 1
+  save_interval: 50
+
+logging:
+  use_wandb: false
+  wandb_project: nlp-llm-project

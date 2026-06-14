@@ -49,7 +49,8 @@ def get_lr(step: int, cfg: dict, max_steps: int) -> float:
 def train(cfg: dict) -> None:
     set_seed(cfg["project"]["seed"])
     device = torch.device(cfg["project"]["device"] if torch.cuda.is_available() else "cpu")
-    dtype = torch.bfloat16 if cfg["project"]["dtype"] == "bfloat16" else torch.float16
+    dtype_name = str(cfg["project"].get("dtype", "float16")).lower()
+    dtype = torch.bfloat16 if dtype_name in {"bfloat16", "bf16"} else torch.float16
     use_amp = device.type == "cuda"
     # fp16 needs loss scaling on V100 etc.; bf16 has enough dynamic range without it
     use_grad_scaler = use_amp and dtype is torch.float16
@@ -60,19 +61,25 @@ def train(cfg: dict) -> None:
     ckpt_dir.mkdir(parents=True, exist_ok=True)
 
     model = build_llama_from_config(cfg).to(device)
+    n_params = sum(p.numel() for p in model.parameters())
+    print(f"Model parameters: {n_params:,}")
     init_from = cfg["paths"].get("init_from")
     if init_from:
         load_model_weights(init_from, model)
         print(f"Initialized model weights from {init_from}")
     if cfg["model"].get("use_gradient_checkpointing"):
         model.model.config.use_gradient_checkpointing = True
+    if cfg["project"].get("compile", False):
+        print("project.compile=true requested; skipping torch.compile to keep checkpoint keys stable")
 
     train_ds = PretrainDataset(cfg["paths"]["train_bin"], cfg["model"]["context_length"])
     val_ds = PretrainDataset(cfg["paths"]["val_bin"], cfg["model"]["context_length"])
     train_loader = DataLoader(
         train_ds,
         batch_size=cfg["train"]["micro_batch_size"],
-        shuffle=True,
+        # PretrainDataset already maps sequential indices to pseudo-random token
+        # windows. Avoid RandomSampler(torch.randperm(n)) on 100M+ token corpora.
+        shuffle=bool(cfg["data"].get("shuffle_indices", False)),
         num_workers=cfg["data"].get("num_workers", 0),
         pin_memory=use_amp,
         drop_last=True,

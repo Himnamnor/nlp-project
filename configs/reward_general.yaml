@@ -1,0 +1,48 @@
+# configs/reward_general.yaml
+# 用途：泛化 SFT 模型的奖励模型训练（PKU-SafeRLHF）
+
+project:
+  name: llama-general-90m-reward
+  seed: 42
+  device: cuda
+  dtype: bfloat16
+
+paths:
+  tokenizer_dir: tokenizer_general/
+  sft_ckpt: checkpoints/sft_general_full/best.pt
+  checkpoint_dir: checkpoints/reward_general/
+  log_dir: logs/reward_general/
+
+model:
+  n_layer: 10
+  d_model: 768
+  n_heads: 12
+  n_kv_heads: 4
+  context_length: 1024
+  vocab_size: 32768
+  tie_word_embeddings: true
+
+data:
+  dataset: PKU-Alignment/PKU-SafeRLHF
+  split: train
+  max_samples: 50000
+  max_length: 512
+  val_ratio: 0.05
+  num_workers: 4
+
+train:
+  num_epochs: 1
+  batch_size: 8
+  learning_rate: 5.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.03
+  grad_clip: 1.0
+  log_interval: 20
+  eval_interval: 200
+  save_interval: 500
+  max_steps: null
+  target_pairwise_acc: 0.65
+
+logging:
+  use_wandb: false
+  wandb_project: nlp-llm-project

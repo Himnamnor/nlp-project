@@ -1,0 +1,74 @@
+# configs/pretrain_general_fineweb.yaml
+# 用途：FineWeb-Edu 100BT shuffled 备选泛化预训练配置
+#
+# 如果 SmolLM-Corpus 首轮效果仍偏教材 / 合成风，可以切到该配置继续从 0 或重新训练。
+# 该数据集是 FineWeb-Edu 100B token 的全局 shuffle 版本，覆盖更广，但噪声和体量也更大。
+
+project:
+  name: llama-general-90m-fineweb-pretrain
+  seed: 42
+  device: cuda
+  dtype: bfloat16
+  compile: false
+
+paths:
+  tokenizer_dir: tokenizer_general_fineweb/
+  data_dir: data/processed_general_fineweb/
+  train_bin: data/processed_general_fineweb/train.bin
+  val_bin: data/processed_general_fineweb/val.bin
+  checkpoint_dir: checkpoints/pretrain_general_fineweb/
+  log_dir: logs/pretrain_general_fineweb/
+  samples_path: samples/pretrain_general_fineweb/
+
+model:
+  n_layer: 10
+  d_model: 768
+  n_heads: 12
+  n_kv_heads: 4
+  context_length: 1024
+  vocab_size: 32768
+  rope_theta: 10000.0
+  rms_norm_eps: 1.0e-5
+  tie_word_embeddings: true
+  use_gradient_checkpointing: false
+
+tokenizer:
+  dataset: HuggingFaceFW/fineweb_edu_100BT-shuffled
+  split: train
+  text_field: text
+  streaming: true
+  vocab_size: 32768
+  min_frequency: 2
+  max_train_samples: 300000
+  max_tokens: 500000000
+  val_ratio: 0.005
+  special_tokens:
+    bos: "<s>"
+    eos: "</s>"
+    pad: "<pad>"
+
+data:
+  num_workers: 4
+  prefetch_factor: 2
+  shuffle_indices: false
+
+train:
+  max_steps: 8000
+  micro_batch_size: 24
+  grad_accum_steps: 4
+  learning_rate: 2.0e-4
+  min_lr: 2.0e-5
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  grad_clip: 1.0
+  warmup_steps: 1000
+  eval_interval: 500
+  log_interval: 10
+  save_interval: 500
+  keep_last_n_ckpts: 3
+
+logging:
+  use_wandb: false
+  wandb_project: nlp-llm-project
+  use_tensorboard: false

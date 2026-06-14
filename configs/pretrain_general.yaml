@@ -1,0 +1,96 @@
+# configs/pretrain_general.yaml
+# 用途：从 0 泛化预训练（5090 推荐主配置）
+#
+# 数据选择：
+# - 主体使用 HuggingFaceTB/smollm-corpus，面向 small LM 的教育 / 合成 / 代码混合语料。
+# - 三个子集按 token budget 混合：Cosmopedia v2 45%、FineWeb-Edu dedup 45%、Python-Edu 10%。
+# - 这比 TinyStories 泛化覆盖面大很多，同时比完整 FineWeb-Edu 更适合单卡小模型训练。
+
+project:
+  name: llama-general-90m-pretrain
+  seed: 42
+  device: cuda
+  dtype: bfloat16          # RTX 5090 建议 bf16；若 PyTorch/CUDA 不支持再改 float16
+  compile: false
+
+paths:
+  tokenizer_dir: tokenizer_general/
+  data_dir: data/processed_general/
+  train_bin: data/processed_general/train.bin
+  val_bin: data/processed_general/val.bin
+  checkpoint_dir: checkpoints/pretrain_general/
+  log_dir: logs/pretrain_general/
+  samples_path: samples/pretrain_general/
+
+model:
+  n_layer: 10
+  d_model: 768
+  n_heads: 12
+  n_kv_heads: 4
+  context_length: 1024
+  vocab_size: 32768
+  rope_theta: 10000.0
+  rms_norm_eps: 1.0e-5
+  tie_word_embeddings: true
+  use_gradient_checkpointing: false
+
+tokenizer:
+  vocab_size: 32768
+  min_frequency: 2
+  max_train_samples: 300000
+  max_tokens: 300000000       # 首轮建议 300M；5090 时间充裕可改 500M/1B
+  val_ratio: 0.005
+  text_field: text
+  streaming: true
+  special_tokens:
+    bos: "<s>"
+    eos: "</s>"
+    pad: "<pad>"
+  sources:
+    - dataset: HuggingFaceTB/smollm-corpus
+      dataset_config: cosmopedia-v2
+      split: train
+      text_field: text
+      streaming: true
+      weight: 0.45
+      shuffle_buffer_size: 10000
+    - dataset: HuggingFaceTB/smollm-corpus
+      dataset_config: fineweb-edu-dedup
+      split: train
+      text_field: text
+      streaming: true
+      weight: 0.45
+      shuffle_buffer_size: 10000
+    - dataset: HuggingFaceTB/smollm-corpus
+      dataset_config: python-edu
+      split: train
+      text_field: text
+      streaming: true
+      weight: 0.10
+      shuffle_buffer_size: 10000
+
+data:
+  num_workers: 4
+  prefetch_factor: 2
+  shuffle_indices: false
+
+train:
+  max_steps: 6000
+  micro_batch_size: 24
+  grad_accum_steps: 4        # 约 98k tokens / optimizer step
+  learning_rate: 2.0e-4
+  min_lr: 2.0e-5
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  grad_clip: 1.0
+  warmup_steps: 1000
+  eval_interval: 500
+  log_interval: 10
+  save_interval: 500
+  keep_last_n_ckpts: 3
+
+logging:
+  use_wandb: false
+  wandb_project: nlp-llm-project
+  use_tensorboard: false
