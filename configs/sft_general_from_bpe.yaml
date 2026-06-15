@@ -1,0 +1,53 @@
+# configs/sft_general_from_bpe.yaml
+# Purpose: full-parameter SFT from the 90M from-BPE general pretrain run.
+
+project:
+  name: llama-general-90m-from-bpe-sft-full
+  seed: 42
+  device: cuda
+  dtype: bfloat16
+
+paths:
+  tokenizer_dir: /root/autodl-tmp/Project/tokenizer_general_from_bpe/
+  pretrain_ckpt: /root/autodl-tmp/checkpoints/pretrain_general_from_bpe/best.pt
+  checkpoint_dir: /root/autodl-tmp/checkpoints/sft_general_from_bpe/
+  log_dir: /root/autodl-tmp/Project/logs/sft_general_from_bpe/
+  eval_samples: /root/autodl-tmp/Project/logs/sft_general_from_bpe/eval_samples.jsonl
+
+model:
+  n_layer: 10
+  d_model: 768
+  n_heads: 12
+  n_kv_heads: 4
+  context_length: 1024
+  vocab_size: 32768
+  tie_word_embeddings: true
+
+data:
+  dataset: yahma/alpaca-cleaned
+  min_samples: 2000
+  max_samples: null
+  max_seq_length: 1024
+  num_workers: 4
+
+sft:
+  prompt_template: alpaca
+  trainable_layers: full
+  freeze_embedding: false
+
+train:
+  num_epochs: 4
+  micro_batch_size: 8
+  grad_accum_steps: 4
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  grad_clip: 1.0
+  warmup_ratio: 0.03
+  eval_interval: 200
+  log_interval: 10
+  save_interval: 500
+  max_steps: 6000
+
+logging:
+  use_wandb: false
+  wandb_project: nlp-llm-project

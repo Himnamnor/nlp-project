@@ -50,24 +50,14 @@ tokenizer:
       split: train
       text_field: text
       streaming: true
-      weight: 0.45
-      max_samples: 135000
+      weight: 0.50
       shuffle_buffer_size: 10000
     - dataset: HuggingFaceTB/smollm-corpus
       dataset_config: fineweb-edu-dedup
       split: train
       text_field: text
       streaming: true
-      weight: 0.45
-      max_samples: 135000
-      shuffle_buffer_size: 10000
-    - dataset: HuggingFaceTB/smollm-corpus
-      dataset_config: python-edu
-      split: train
-      text_field: text
-      streaming: true
-      weight: 0.10
-      max_samples: 30000
+      weight: 0.50
       shuffle_buffer_size: 10000
 
 data:
