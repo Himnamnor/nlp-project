@@ -60,6 +60,49 @@ RUN_TOKENIZER=0 \
   bash scripts/run_general_pretrain.sh configs/pretrain_general.yaml
 ```
 
+## Continued Pretraining
+
+Use this when `/root/autodl-tmp/Project/checkpoints/pretrain_general/best.pt`
+and `tokenizer_general/` already exist, but the previous continued run produced
+no usable artifacts.
+
+If only `best.slim.pt` is available, it can still initialize training because it
+keeps `model_state_dict`; place it at
+`/root/autodl-tmp/Project/checkpoints/pretrain_general/best.pt` or change
+`paths.init_from` in `configs/pretrain_general_continued.yaml`.
+
+First prepare fresh continued data and train:
+
+```bash
+mkdir -p /root/autodl-tmp/Project/logs/pretrain_general_continued
+export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
+RUN_TOKENIZER=0 DATA_MAX_TOKENS=300000000 \
+  bash scripts/run_general_pretrain.sh configs/pretrain_general_continued.yaml \
+  2>&1 | tee /root/autodl-tmp/Project/logs/pretrain_general_continued/train.log
+```
+
+The continued config writes new data, checkpoints, logs, and samples under
+`/root/autodl-tmp/Project/` to avoid filling the system disk.
+
+If `/root/autodl-tmp/Project/data/processed_general_continued/train.bin` and
+`val.bin` already exist, restart only the model training:
+
+```bash
+mkdir -p /root/autodl-tmp/Project/logs/pretrain_general_continued
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
+RUN_TOKENIZER=0 RUN_DATA=0 \
+  bash scripts/run_general_pretrain.sh configs/pretrain_general_continued.yaml \
+  2>&1 | tee -a /root/autodl-tmp/Project/logs/pretrain_general_continued/train.log
+```
+
+The continued config saves under
+`/root/autodl-tmp/Project/checkpoints/pretrain_general_continued/` every 250
+optimizer steps, so an interrupted run should still leave recent `step_*.pt`
+files and a `best.pt` once the first eval has completed.
+
 ## Generate Pretrain Samples
 
 ```bash

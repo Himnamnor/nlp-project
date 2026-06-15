@@ -1,0 +1,87 @@
+# configs/pretrain_general_continued.yaml
+# Purpose: continue general pretraining from the data-disk base checkpoint.
+# This run keeps the original tokenizer/model shape and writes to separate dirs
+# so it can be compared against the first general pretrain checkpoint.
+
+project:
+  name: llama-general-90m-pretrain-continued
+  seed: 43
+  device: cuda
+  dtype: bfloat16
+  compile: false
+
+paths:
+  tokenizer_dir: tokenizer_general/
+  init_from: /root/autodl-tmp/Project/checkpoints/pretrain_general/best.pt
+  data_dir: /root/autodl-tmp/Project/data/processed_general_continued/
+  train_bin: /root/autodl-tmp/Project/data/processed_general_continued/train.bin
+  val_bin: /root/autodl-tmp/Project/data/processed_general_continued/val.bin
+  checkpoint_dir: /root/autodl-tmp/Project/checkpoints/pretrain_general_continued/
+  log_dir: /root/autodl-tmp/Project/logs/pretrain_general_continued/
+  samples_path: /root/autodl-tmp/Project/samples/pretrain_general_continued/
+
+model:
+  n_layer: 10
+  d_model: 768
+  n_heads: 12
+  n_kv_heads: 4
+  context_length: 1024
+  vocab_size: 32768
+  rope_theta: 10000.0
+  rms_norm_eps: 1.0e-5
+  tie_word_embeddings: true
+  use_gradient_checkpointing: false
+
+tokenizer:
+  vocab_size: 32768
+  min_frequency: 2
+  max_train_samples: 300000
+  max_tokens: 300000000
+  val_ratio: 0.005
+  text_field: text
+  streaming: true
+  special_tokens:
+    bos: "<s>"
+    eos: "</s>"
+    pad: "<pad>"
+  sources:
+    - dataset: HuggingFaceTB/smollm-corpus
+      dataset_config: cosmopedia-v2
+      split: train
+      text_field: text
+      streaming: true
+      weight: 0.50
+      shuffle_buffer_size: 10000
+    - dataset: HuggingFaceTB/smollm-corpus
+      dataset_config: fineweb-edu-dedup
+      split: train
+      text_field: text
+      streaming: true
+      weight: 0.50
+      shuffle_buffer_size: 10000
+
+data:
+  num_workers: 4
+  prefetch_factor: 2
+  shuffle_indices: false
+
+train:
+  max_steps: 6000
+  micro_batch_size: 12
+  grad_accum_steps: 8
+  learning_rate: 1.0e-4
+  min_lr: 1.0e-5
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  grad_clip: 1.0
+  warmup_steps: 500
+  eval_interval: 250
+  log_interval: 10
+  save_interval: 250
+  keep_last_n_ckpts: 4
+
+logging:
+  use_wandb: false
+  wandb_project: nlp-llm-project
+  use_tensorboard: false

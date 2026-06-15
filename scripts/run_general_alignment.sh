@@ -34,3 +34,4 @@ if [[ "${RUN_SAFETY_EVAL:-1}" == "1" ]]; then
     --ckpt checkpoints/ppo_general/best.pt --label ppo_general \
     --output logs/ppo_general/safety_eval_ppo_general.jsonl
 fi
+

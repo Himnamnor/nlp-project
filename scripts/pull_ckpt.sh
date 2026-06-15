@@ -10,25 +10,27 @@
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
-ssh -p  root@
 
 REMOTE_USER="${REMOTE_USER:-root}"
 REMOTE_HOST="${REMOTE_HOST:-connect.westc.seetacloud.com}"
 REMOTE_PORT="${REMOTE_PORT:-53460}"
-REMOTE_ROOT="${REMOTE_ROOT:-/root/Project}"
+REMOTE_ROOT="${REMOTE_ROOT:-/root/autodl-tmp/Project}"
 LOCAL_ROOT="${LOCAL_ROOT:-$(pwd)}"
 
 REMOTE_ITEMS="${REMOTE_ITEMS:-\
 checkpoints/pretrain_general/best.slim.pt \
+checkpoints/pretrain_general_continued/best.slim.pt \
 checkpoints/sft_general_full/best.slim.pt \
 checkpoints/reward_general/best.slim.pt \
 checkpoints/ppo_general/best.slim.pt \
 tokenizer_general \
 configs/pretrain_general.yaml \
+configs/pretrain_general_continued.yaml \
 configs/sft_general.yaml \
 configs/reward_general.yaml \
 configs/ppo_general.yaml \
 logs/pretrain_general \
+logs/pretrain_general_continued \
 logs/sft_general_full \
 logs/ppo_general}"
 
