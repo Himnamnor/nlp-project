@@ -12,11 +12,11 @@ project:
 
 paths:
   tokenizer_dir: tokenizer_general/
-  init_from: /root/autodl-tmp/Project/checkpoints/pretrain_general/best.pt
+  init_from: checkpoints/pretrain_general/best.slim.pt
   data_dir: /root/autodl-tmp/Project/data/processed_general_continued/
   train_bin: /root/autodl-tmp/Project/data/processed_general_continued/train.bin
   val_bin: /root/autodl-tmp/Project/data/processed_general_continued/val.bin
-  checkpoint_dir: /root/autodl-tmp/Project/checkpoints/pretrain_general_continued/
+  checkpoint_dir: /root/autodl-tmp/checkpoints/pretrain_general_continued/
   log_dir: /root/autodl-tmp/Project/logs/pretrain_general_continued/
   samples_path: /root/autodl-tmp/Project/samples/pretrain_general_continued/
 

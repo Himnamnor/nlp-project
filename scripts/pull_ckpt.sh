@@ -12,9 +12,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 REMOTE_USER="${REMOTE_USER:-root}"
-REMOTE_HOST="${REMOTE_HOST:-connect.westc.seetacloud.com}"
-REMOTE_PORT="${REMOTE_PORT:-53460}"
-REMOTE_ROOT="${REMOTE_ROOT:-/root/autodl-tmp/Project}"
+REMOTE_HOST="${REMOTE_HOST:-connect.westb.seetacloud.com}"
+REMOTE_PORT="${REMOTE_PORT:-53583}"
+REMOTE_ROOT="${REMOTE_ROOT:-/root/Project}"
 LOCAL_ROOT="${LOCAL_ROOT:-$(pwd)}"
 
 REMOTE_ITEMS="${REMOTE_ITEMS:-\
