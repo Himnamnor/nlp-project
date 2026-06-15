@@ -21,7 +21,7 @@ if [[ $# -gt 0 ]]; then
   shift
 fi
 
-export HF_ENDPOINT="${HF_ENDPOINT:-https://huggingface.co}"
+export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
 
 if [[ "${RUN_TOKENIZER:-1}" == "1" ]]; then
   BPE_ARGS=(--config "$CONFIG")
